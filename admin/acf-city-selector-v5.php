@@ -47,6 +47,11 @@
             }
 
 
+            function settings( $settings ) {
+                return $settings;
+            }
+
+
             /**
              * render_field_settings()
              *
@@ -158,7 +163,7 @@
                 } elseif ( false == $default_country && 'state_city' == $which_fields ) {
                     // no default country is set, so show warning
                     $message = esc_html__( "You haven't set a default country, so NO provinces/states and cities will be loaded.", 'acf-city-selector' );
-                    echo sprintf( '<div class="acfcs"><div class="acfcs__notice field__message field__message--error">%s</div></div>', $message );
+                    echo sprintf( '<div class="acfcs"><div class="acfcs__notice field__message field__message--error">%s</div></div>', esc_html( $message ) );
                 }
 
                 $prefill_values = [
@@ -167,16 +172,16 @@
                 ];
 
                 if ( 'state_city' != $which_fields ) {
-                    echo acfcs_render_dropdown( 'country', $field, $selected_country, $prefill_values );
+                    acfcs_render_dropdown( 'country', $field, $selected_country, $prefill_values );
                 }
                 if ( 'all' == $which_fields || strpos( $which_fields, 'state' ) !== false ) {
-                    echo acfcs_render_dropdown( 'state', $field, $selected_state, $prefill_values );
+                    acfcs_render_dropdown( 'state', $field, $selected_state, $prefill_values );
                 }
                 if ( 'all' == $which_fields || strpos( $which_fields, 'city' ) !== false ) {
-                    echo acfcs_render_dropdown( 'city', $field, $selected_city, $prefill_values );
+                    acfcs_render_dropdown( 'city', $field, $selected_city, $prefill_values );
                 }
                 if ( ! isset( $field[ 'parent_layout' ] ) && ! isset( $field[ 'parent_repeater' ] ) && $store_meta ) {
-                    echo acfcs_render_hidden_field( 'store_meta', '1' );
+                    acfcs_render_hidden_field( 'store_meta', '1' );
                 }
             }
 
@@ -188,23 +193,25 @@
              * Use this action to add CSS + JavaScript to assist your render_field() action.
              */
             function input_admin_enqueue_scripts() {
-                $plugin_url     = $this->settings[ 'url' ];
-                $plugin_version = $this->settings[ 'version' ];
+                $plugin_url     = trailingslashit( sprintf( '%s/plugins/acf-city-selector', WP_CONTENT_URL ) );
+                $plugin_version = get_option( 'acfcs_version' );
 
-                wp_register_script( 'acfcs-init', "{$plugin_url}assets/js/init.js", array( 'jquery', 'acf-input' ), $plugin_version );
+                wp_register_script( 'acfcs-init', "{$plugin_url}assets/js/init.js", array( 'jquery', 'acf-input' ), $plugin_version, false );
                 wp_enqueue_script( 'acfcs-init' );
 
-                wp_register_script( 'acfcs-process', "{$plugin_url}assets/js/city-selector.js", array( 'jquery', 'acf-input' ), $plugin_version );
+                wp_register_script( 'acfcs-process', "{$plugin_url}assets/js/city-selector.js", array( 'jquery', 'acf-input' ), $plugin_version, false );
                 wp_enqueue_script( 'acfcs-process' );
-
-                $all_info                     = acfcs_get_field_settings();
-                $js_vars[ 'ajaxurl' ]         = admin_url( 'admin-ajax.php' );
-                $js_vars[ 'default_country' ] = ( isset( $all_info[ 'default_country' ] ) && false != $all_info[ 'default_country' ] ) ? $all_info[ 'default_country' ] : false;
-                $js_vars[ 'post_id' ]         = ( isset( $_GET[ 'post' ] ) ) ? (int) $_GET[ 'post' ] : false;
-                $js_vars[ 'show_labels' ]     = ( isset( $all_info[ 'show_labels' ] ) ) ? $all_info[ 'show_labels' ] : apply_filters( 'acfcs_show_labels', true );
-                $js_vars[ 'store_meta' ]      = ( isset( $all_info[ 'store_meta' ] ) ) ? $all_info[ 'store_meta' ] : false;
-                $js_vars[ 'use_select2' ]     = ( isset( $all_info[ 'use_select2' ] ) ) ? $all_info[ 'use_select2' ] : false;
-                $js_vars[ 'which_fields' ]    = ( isset( $all_info[ 'which_fields' ] ) ) ? $all_info[ 'which_fields' ] : 'all';
+                
+                $all_info                       = acfcs_get_field_settings();
+                $js_vars[ 'ajaxurl' ]           = admin_url( 'admin-ajax.php' );
+                $js_vars[ 'default_country' ]   = ( isset( $all_info[ 'default_country' ] ) && false != $all_info[ 'default_country' ] ) ? $all_info[ 'default_country' ] : false;
+                $js_vars[ 'post_id' ]           = 0 < get_the_ID() ? (int) get_the_ID() : false;
+                $js_vars[ 'acfcs_state_nonce' ] = wp_create_nonce( 'acfcs-state-nonce' );
+                $js_vars[ 'acfcs_city_nonce' ]  = wp_create_nonce( 'acfcs-city-nonce' );
+                $js_vars[ 'show_labels' ]       = ( isset( $all_info[ 'show_labels' ] ) ) ? $all_info[ 'show_labels' ] : apply_filters( 'acfcs_show_labels', true );
+                $js_vars[ 'store_meta' ]        = ( isset( $all_info[ 'store_meta' ] ) ) ? $all_info[ 'store_meta' ] : false;
+                $js_vars[ 'use_select2' ]       = ( isset( $all_info[ 'use_select2' ] ) ) ? $all_info[ 'use_select2' ] : false;
+                $js_vars[ 'which_fields' ]      = ( isset( $all_info[ 'which_fields' ] ) ) ? $all_info[ 'which_fields' ] : 'all';
 
                 wp_localize_script( 'acfcs-process', 'city_selector_vars', $js_vars );
             }
@@ -241,8 +248,7 @@
                 if ( strlen( $country_code ) == 2 && false != $state_code ) {
                     global $wpdb;
                     $table                  = $wpdb->prefix . 'cities';
-                    $sql_query              = $wpdb->prepare( "SELECT country, state_name FROM {$table} WHERE country_code = %s AND state_code = %s", $country_code, $state_code );
-                    $row                    = $wpdb->get_row( $sql_query );
+                    $row                    = $wpdb->get_row( $wpdb->prepare( "SELECT country, state_name FROM %i WHERE country_code = %s AND state_code = %s", $table, $country_code, $state_code ) );
                     $value[ 'stateCode' ]   = $state_code;
                     $value[ 'stateName' ]   = ( isset( $row->state_name ) ) ? $row->state_name : false;
                     $value[ 'countryName' ] = ( isset( $row->country ) ) ? $row->country : false;
@@ -394,5 +400,5 @@
             }
         }
 
-        new acf_field_city_selector( $this->settings );
+        new acf_field_city_selector( $this );
     }

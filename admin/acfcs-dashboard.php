@@ -5,18 +5,27 @@
     function acfcs_dashboard() {
 
         if ( ! current_user_can( apply_filters( 'acfcs_user_cap', 'manage_options' ) ) ) {
-            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.' ) );
+            wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'acf-city-selector' ) );
         }
-
+        
+        $submitted_raw_data = false;
+        if ( isset( $_POST[ 'acfcs_import_raw_nonce' ] ) ) {
+            if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ 'acfcs_import_raw_nonce' ] ) ), 'acfcs-import-raw-nonce' ) ) {
+                ACF_City_Selector::acfcs_errors()->add( 'error_no_nonce_match', esc_html__( 'Something went wrong, please try again.', 'acf-city-selector' ) );
+            } else {
+                $submitted_raw_data = ( isset( $_POST[ 'raw_csv_import' ] ) ) ? sanitize_textarea_field( wp_unslash( $_POST[ 'raw_csv_import' ] ) ) : false;
+            }
+        }
+        
         ACF_City_Selector::acfcs_show_admin_notices();
 
         $show_raw_import = true;
         ?>
 
         <div class="wrap acfcs">
-            <?php echo sprintf( '<h1>%s</h1>', get_admin_page_title() ); ?>
+            <?php echo sprintf( '<h1>%s</h1>', esc_html( get_admin_page_title() ) ); ?>
 
-            <?php echo ACF_City_Selector::acfcs_admin_menu(); ?>
+            <?php do_action( 'acfcs_admin_menu' ); ?>
 
             <div class="acfcs__container">
                 <div class="admin_left">
@@ -38,7 +47,6 @@
 
                         <?php if ( true === $show_raw_import ) { ?>
                             <?php $placeholder = "Amsterdam;NH;Noord-Holland;NL;Netherlands\nRotterdam;ZH;Zuid-Holland;NL;Netherlands"; ?>
-                            <?php $submitted_raw_data = ( isset( $_POST[ 'raw_csv_import' ] ) ) ? sanitize_textarea_field( $_POST[ 'raw_csv_import' ] ) : false; ?>
                             <div class="acfcs__section acfcs__section--raw-import">
                                 <?php echo sprintf( '<h2>%s</h2>', esc_html__( 'Import CSV data (from clipboard)', 'acf-city-selector' ) ); ?>
                                 <p>
